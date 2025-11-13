@@ -1,4 +1,4 @@
-module PLAYSTORESCRAPPER
+module github.com/dev-suryanshrajawat/Play-Store-Scrapping-Project/PlaystoreScrappingPro
 
 go 1.24.1
 
