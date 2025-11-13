@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"net/http"
 
-	"PLAYSTORESCRAPPER/parser"
+	"github.com/dev-suryanshrajawat/Play-Store-Scrapping-Project/PlaystoreScrappingPro/parser"
 
 	"github.com/gin-gonic/gin"
 )
@@ -73,3 +73,4 @@ Full Description: %s
 
 	c.Data(http.StatusOK, "text/html; charset=utf-8", []byte(html))
 }
+
