@@ -24,8 +24,8 @@ type App struct {
 	Free             bool     `json:"free"`
 	AdSupported      bool     `json:"adSupported"`
 	InAppPurchase    bool     `json:"InAppPurchase"`
-	Updated          string   `json:"updated"`
-	Version          string   `json:"version"`
+	LastUpdated      string   `json:"updated"`
+	CurrentVersion   string   `json:"version"`
 	AndroidVersion   string   `json:"androidVersion"`
 	ShortDesc        string   `json:"summary"`
 	Description      string   `json:"description"`
@@ -36,7 +36,7 @@ type App struct {
 func ParsePlayStoreHTML(doc *goquery.Document) (*App, error) {
 	app := &App{}
 
-	// ---------- 1) Try JSON-LD structured data (preferred) ----------
+	//Try JSON-LD structured data (preferred)
 	doc.Find("script[type='application/ld+json']").Each(func(i int, s *goquery.Selection) {
 		text := strings.TrimSpace(s.Text())
 		// Some pages include multiple JSON-LD blocks; find the one for SoftwareApplication
@@ -97,8 +97,7 @@ func ParsePlayStoreHTML(doc *goquery.Document) (*App, error) {
 		}
 	})
 
-	// ---------- 2) Meta tags fallbacks ----------
-	// og:url contains canonical url (with id param)
+	// url contains canonical url (with id param)
 	if app.AppName == "" {
 		app.AppName = strings.TrimSpace(doc.Find(`meta[property="og:url"]`).AttrOr("content", ""))
 	}
@@ -110,13 +109,16 @@ func ParsePlayStoreHTML(doc *goquery.Document) (*App, error) {
 	if app.ShortDesc == "" {
 		app.ShortDesc = strings.TrimSpace(doc.Find(`meta[name="description"]`).AttrOr("content", ""))
 	}
-	// long description fallback: some pages put description in meta or in divs
+
+	// Full Description
+	app.Description = strings.Join(strings.Fields(strings.TrimSpace(
+		doc.Find("div[jsname='sngebd']").First().Text(),
+	)), " ")
+
 	if app.Description == "" {
-		// try common container
-		app.Description = strings.TrimSpace(doc.Find("div[jsname='sngebd']").Text())
-		if app.Description == "" {
-			app.Description = strings.TrimSpace(doc.Find("div.bARER").First().Text())
-		}
+		app.Description = strings.Join(strings.Fields(strings.TrimSpace(
+			doc.Find("div[data-g-id='description']").First().Text(),
+		)), " ")
 	}
 
 	//Developer website
@@ -151,49 +153,41 @@ func ParsePlayStoreHTML(doc *goquery.Document) (*App, error) {
 	}
 
 	//"Details" section parsing
-	doc.Find("div.hAyfc").Each(func(i int, s *goquery.Selection) {
-		label := strings.TrimSpace(s.Find("div.BgcNfc").Text())
-		value := strings.TrimSpace(s.Find("span.htlgb").Text())
-		// value sometimes in multiple spans; if empty try concatenation
-		if value == "" {
-			valParts := []string{}
-			s.Find("span.htlgb").Each(func(j int, sp *goquery.Selection) {
-				part := strings.TrimSpace(sp.Text())
-				if part != "" {
-					valParts = append(valParts, part)
-				}
-			})
-			value = strings.Join(valParts, " ")
-		}
+	// ---------- Details section App (supports old + new Play Store layouts) ----------
+	doc.Find("div.hAyfc, div.ClM7O").Each(func(i int, s *goquery.Selection) {
+		label := strings.TrimSpace(s.Find("div.BgcNfc, div.wVqUob").Text())
+		value := strings.TrimSpace(s.Find("span.htlgb, div.reAt0").Text())
+
 		switch strings.ToLower(label) {
 		case "updated", "updated on":
-			if app.Updated == "" {
-				app.Updated = value
+			if app.LastUpdated == "" {
+				app.LastUpdated = value
 			}
 		case "current version", "version":
-			if app.Version == "" {
-				app.Version = value
+			if app.CurrentVersion == "" {
+				app.CurrentVersion = value
 			}
 		case "requires android":
 			if app.AndroidVersion == "" {
 				app.AndroidVersion = value
 			}
-		case "in-app purchases", "in app purchases":
-			app.InAppPurchase = true
-			if value != "" {
-				// some pages show the text like "₹100.00 per item" — still indicates IAP
-				app.InAppPurchase = true
-			}
-		case "contains ads", "contains ads?":
-			// direct label
-			app.AdSupported = true
-		case "installs":
+		case "installs", "downloads":
 			if app.Installs == "" {
 				app.Installs = value
 			}
 		}
 	})
 
+	// ---------- Fallback: in case the above misses ----------
+	if app.LastUpdated == "" {
+		app.LastUpdated = strings.TrimSpace(doc.Find("div:contains('Updated on') + div").First().Text())
+	}
+	if app.CurrentVersion == "" {
+		app.CurrentVersion = strings.TrimSpace(doc.Find("div:contains('Current Version') + div").First().Text())
+	}
+	if app.AndroidVersion == "" {
+		app.AndroidVersion = strings.TrimSpace(doc.Find("div:contains('Requires Android') + div").First().Text())
+	}
 	//Try alternate selectors for installs
 	if app.Installs == "" {
 		// commonly visible under div.wVqUob or span
@@ -205,6 +199,7 @@ func ParsePlayStoreHTML(doc *goquery.Document) (*App, error) {
 			doc.Find("div:contains('Downloads'), div:contains('Installs')").Each(func(i int, s *goquery.Selection) {
 				if app.Installs == "" {
 					app.Installs = strings.TrimSpace(s.Text())
+					fmt.Println(app.Installs)
 				}
 			})
 		}
@@ -213,7 +208,7 @@ func ParsePlayStoreHTML(doc *goquery.Document) (*App, error) {
 	//Rating and rating count fallback (if JSON-LD didn't provide)
 	if app.Rating == 0.0 {
 		// try element with rating value
-		if r := strings.TrimSpace(doc.Find("div.BHMmbe").First().Text()); r != "" {
+		if r := strings.TrimSpace(doc.Find("div.jILTFe").First().Text()); r != "" {
 			if parsed, err := strconv.ParseFloat(strings.ReplaceAll(r, ",", ""), 64); err == nil {
 				app.Rating = parsed
 			}
@@ -289,12 +284,11 @@ func ParsePlayStoreHTML(doc *goquery.Document) (*App, error) {
 		app.Free = (price == "0" || strings.EqualFold(price, "free"))
 	}
 
-	//Final fallbacks & defaults
 	if app.Title == "" {
 		app.Title = strings.TrimSpace(doc.Find("h1 span").First().Text())
 	}
 	if app.Icon == "" {
-		// try common icon selectors
+
 		app.Icon = strings.TrimSpace(doc.Find("img.T75of").AttrOr("src", ""))
 		if app.Icon == "" {
 			app.Icon = strings.TrimSpace(doc.Find("img[itemprop='image']").AttrOr("src", ""))
@@ -318,7 +312,7 @@ func ParsePlayStoreHTML(doc *goquery.Document) (*App, error) {
 			app.AppName = u
 		}
 	}
-	// set readable defaults
+
 	if app.Category == "" {
 		app.Category = "N/A"
 	}
@@ -332,7 +326,6 @@ func ParsePlayStoreHTML(doc *goquery.Document) (*App, error) {
 		app.ShortDesc = app.Description
 	}
 
-	// If still no title -> treat as not found
 	if app.Title == "" {
 		return nil, fmt.Errorf("app not found on Play Store")
 	}
