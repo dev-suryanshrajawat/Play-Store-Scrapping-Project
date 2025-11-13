@@ -3,10 +3,10 @@ package main
 import (
 	"html/template"
 	"net/http"
-
-	"PLAYSTORESCRAPPER/output"
-	"PLAYSTORESCRAPPER/parser"
-	"PLAYSTORESCRAPPER/scraper"
+	
+	"github.com/dev-suryanshrajawat/Play-Store-Scrapping-Project/PlaystoreScrappingPro/output"
+	"github.com/dev-suryanshrajawat/Play-Store-Scrapping-Project/PlaystoreScrappingPro/parser"
+	"github.com/dev-suryanshrajawat/Play-Store-Scrapping-Project/PlaystoreScrappingPro/scraper"
 
 	"github.com/gin-gonic/gin"
 )
@@ -44,3 +44,4 @@ func main() {
 
 	r.Run(":8000")
 }
+
