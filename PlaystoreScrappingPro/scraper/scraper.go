@@ -4,34 +4,41 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/PuerkitoBio/goquery"
 )
 
+
+// Timeout = 3 seconds (PERFORMANCE NFR)
+var httpClient = &http.Client{
+	Timeout: 3 * time.Second,
+}
+
 func FetchPlayStoreHTML(pkg string) (*goquery.Document, error) {
 
 	if !strings.Contains(pkg, ".") {
-		return nil, fmt.Errorf("Invalid package name. Use format like com.whatsapp")
+		return nil, fmt.Errorf("invalid package name, use format like com.whatsapp")
 	}
 
-	url := fmt.Sprintf("https://play.google.com/store/apps/details?id=%s&hl=en&gl=us", pkg)
+	url := fmt.Sprintf("https://play.google.com/store/apps/details?id=%s&hl=en&gl=US", pkg)
 
-	// 👇 Play Store BLOCKS requests without User-Agent
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("request build failed: %v", err)
 	}
 
-	// FAKE as real Chrome Browser
+	// PERFORMANCE BOOST: Real Browser Headers
 	req.Header.Set("User-Agent",
-		"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "+
-			"(KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36")
+		"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36")
+	req.Header.Set("Accept-Language", "en-US,en;q=0.9")
+	req.Header.Set("Accept", "text/html")
+	req.Header.Set("Referer", "https://www.google.com/")
 
-	client := &http.Client{}
-
-	res, err := client.Do(req)
+	// PERFORMANCE: Persistent client reused every time
+	res, err := httpClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to fetch Play Store page: %v", err)
+		return nil, fmt.Errorf("failed to fetch Play Store page: %v", err)
 	}
 	defer res.Body.Close()
 
