@@ -152,31 +152,59 @@ func ParsePlayStoreHTML(doc *goquery.Document) (*App, error) {
 		}
 	}
 
-	//"Details" section parsing
-	// ---------- Details section App (supports old + new Play Store layouts) ----------
+	// ---------------- DETAILS SECTION (updated & stable) ----------------
 	doc.Find("div.hAyfc, div.ClM7O").Each(func(i int, s *goquery.Selection) {
-		label := strings.TrimSpace(s.Find("div.BgcNfc, div.wVqUob").Text())
-		value := strings.TrimSpace(s.Find("span.htlgb, div.reAt0").Text())
+
+		// Try multiple label selectors (Google keeps changing)
+		label := strings.TrimSpace(s.Find("div.BgcNfc").Text())
+		if label == "" {
+			label = strings.TrimSpace(s.Find("div.wVqUob").Text())
+		}
+		if label == "" {
+			label = strings.TrimSpace(s.Find("div.qQjadf").Text())
+		}
+
+		// Try multiple value selectors
+		value := strings.TrimSpace(s.Find("span.htlgb").Text())
+		if value == "" {
+			value = strings.TrimSpace(s.Find("div.reAt0").Text())
+		}
+		if value == "" {
+			value = strings.TrimSpace(s.Find("div.Uc9Gjf").Text())
+		}
 
 		switch strings.ToLower(label) {
 		case "updated", "updated on":
 			if app.LastUpdated == "" {
 				app.LastUpdated = value
 			}
+
 		case "current version", "version":
 			if app.CurrentVersion == "" {
 				app.CurrentVersion = value
 			}
+
 		case "requires android":
 			if app.AndroidVersion == "" {
 				app.AndroidVersion = value
 			}
-		case "installs", "downloads":
+
+		case "installs":
 			if app.Installs == "" {
 				app.Installs = value
 			}
 		}
 	})
+
+	if app.CurrentVersion == "" {
+		app.CurrentVersion = "N.A"
+	}
+	if app.AndroidVersion == "" {
+		app.AndroidVersion = "N.A"
+	}
+	if app.Installs == "" {
+		app.Installs = "N.A"
+	}
 
 	// ---------- Fallback: in case the above misses ----------
 	if app.LastUpdated == "" {
