@@ -1,5 +1,4 @@
 package main
-
 import (
 	"fmt"
 	"strings"
@@ -15,8 +14,9 @@ import (
 	"github.com/gin-gonic/gin"
 
 	tollbooth "github.com/didip/tollbooth/v7"
-	tollbooth_gin "github.com/didip/tollbooth_gin"
+	tollbooth_gin "github.com/didip/tollbooth/v7/gin"
 )
+
 
 ///////////////////////////////////////////////////////////////////////////////
 // SECURITY — sanitize and validate package name
@@ -180,4 +180,5 @@ func main() {
 
 	r.Run(":8000")
 }
+
 
