@@ -21,13 +21,13 @@ func ShowErrorPage(c *gin.Context, message string) {
 // ShowAppInfo displays full Play Store info
 func ShowAppInfo(c *gin.Context, app *parser.App) {
 	rating := "N/A"
-	if app.Rating > 0 {
-		rating = fmt.Sprintf("%.1f ⭐", app.Rating)
+	if app.Rating != "" {
+		rating = app.Rating
 	}
 
 	ratingCount := "N/A"
-	if app.RatingCount > 0 {
-		ratingCount = fmt.Sprintf("%d", app.RatingCount)
+	if app.RatingCount != "" {
+		ratingCount = app.RatingCount
 	}
 
 	//Build screenshot gallery
