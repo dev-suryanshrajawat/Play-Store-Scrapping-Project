@@ -18,8 +18,8 @@ type App struct {
 	DeveloperEmail   string   `json:"developerEmail"`
 	DeveloperWebsite string   `json:"developerWebsite"`
 	Category         string   `json:"genre"`
-	Rating           float64  `json:"rating"`
-	RatingCount      int      `json:"ratingCount"`
+	Rating           string   `json:"rating"`
+	RatingCount      string   `json:"ratingCount"`
 	Installs         string   `json:"installs"`
 	Free             bool     `json:"free"`
 	AdSupported      bool     `json:"adSupported"`
@@ -37,65 +37,98 @@ func ParsePlayStoreHTML(doc *goquery.Document) (*App, error) {
 	app := &App{}
 
 	//Try JSON-LD structured data (preferred)
+	// --- JSON-LD extraction (MOST RELIABLE) ---
 	doc.Find("script[type='application/ld+json']").Each(func(i int, s *goquery.Selection) {
 		text := strings.TrimSpace(s.Text())
-		// Some pages include multiple JSON-LD blocks; find the one for SoftwareApplication
-		if !strings.Contains(text, `"SoftwareApplication"`) && !strings.Contains(text, `"@type": "SoftwareApplication"`) {
+
+		// We only want the SoftwareApplication JSON-LD block
+		if !strings.Contains(text, "SoftwareApplication") {
 			return
 		}
+
 		var data map[string]interface{}
 		if err := json.Unmarshal([]byte(text), &data); err != nil {
 			return
 		}
 
-		// title, image, url, description, category
-		if v := fmt.Sprint(data["name"]); v != "<nil>" && v != "" {
+		// Title
+		if v := fmt.Sprint(data["name"]); v != "" && v != "<nil>" {
 			app.Title = v
 		}
-		if v := fmt.Sprint(data["image"]); v != "<nil>" && v != "" {
+
+		// Icon
+		if v := fmt.Sprint(data["image"]); v != "" && v != "<nil>" {
 			app.Icon = v
 		}
-		if v := fmt.Sprint(data["url"]); v != "<nil>" && v != "" {
+
+		// AppName
+		if v := fmt.Sprint(data["url"]); v != "" && v != "<nil>" {
 			app.AppName = v
 		}
-		if v := fmt.Sprint(data["description"]); v != "<nil>" && v != "" {
+
+		// Description
+		if v := fmt.Sprint(data["description"]); v != "" && v != "<nil>" {
 			app.Description = v
 		}
-		if v := fmt.Sprint(data["applicationCategory"]); v != "<nil>" && v != "" {
+
+		// Category
+		if v := fmt.Sprint(data["applicationCategory"]); v != "" && v != "<nil>" {
 			app.Category = v
 		}
 
-		// author -> developer
+		// Developer Name
 		if author, ok := data["author"].(map[string]interface{}); ok {
-			if v := fmt.Sprint(author["name"]); v != "<nil>" && v != "" {
+			if v := fmt.Sprint(author["name"]); v != "" {
 				app.Developer = v
 			}
 		}
 
-		// aggregateRating
+		// ⭐ RATING
 		if agg, ok := data["aggregateRating"].(map[string]interface{}); ok {
+
+			// RatingValue
 			if rv, ok := agg["ratingValue"]; ok {
-				switch t := rv.(type) {
-				case float64:
-					app.Rating = t
-				case string:
-					if p, err := strconv.ParseFloat(t, 64); err == nil {
-						app.Rating = p
-					}
-				}
+				app.Rating = fmt.Sprint(rv)
 			}
+
+			// RatingCount
 			if rc, ok := agg["ratingCount"]; ok {
-				switch t := rc.(type) {
-				case float64:
-					app.RatingCount = int(t)
-				case string:
-					if p, err := strconv.Atoi(t); err == nil {
-						app.RatingCount = p
-					}
-				}
+				app.RatingCount = fmt.Sprint(rc)
 			}
+
 		}
 	})
+
+	// --- FALLBACK RATING (HTML aria-label method — SUPER RELIABLE) ---
+
+	// Rating
+
+	label := doc.Find("div[aria-label*='star']").AttrOr("aria-label", "")
+	// example: “Rated 4.5 stars out of five”
+	if label != "" {
+		parts := strings.Fields(label)
+		if len(parts) > 1 {
+			app.Rating = parts[1] // second word is rating
+		}
+	}
+	if app.Rating == "" {
+		if f, err := strconv.ParseFloat(app.Rating, 64); err == nil {
+			app.Rating = fmt.Sprintf("%.1f", f)
+		}
+	}
+
+	// RatingCount
+	if app.RatingCount == "" {
+		label := doc.Find("span[aria-label*='ratings']").AttrOr("aria-label", "")
+		// example: "2,302,390 ratings"
+		if label != "" {
+			fields := strings.Fields(label)
+			if len(fields) > 0 {
+				num := strings.ReplaceAll(fields[0], ",", "")
+				app.RatingCount = num
+			}
+		}
+	}
 
 	// url contains canonical url (with id param)
 	if app.AppName == "" {
@@ -230,26 +263,6 @@ func ParsePlayStoreHTML(doc *goquery.Document) (*App, error) {
 					fmt.Println(app.Installs)
 				}
 			})
-		}
-	}
-
-	//Rating and rating count fallback (if JSON-LD didn't provide)
-	if app.Rating == 0.0 {
-		// try element with rating value
-		if r := strings.TrimSpace(doc.Find("div.jILTFe").First().Text()); r != "" {
-			if parsed, err := strconv.ParseFloat(strings.ReplaceAll(r, ",", ""), 64); err == nil {
-				app.Rating = parsed
-			}
-		}
-	}
-	if app.RatingCount == 0 {
-		// Try common selector
-		if rc := strings.TrimSpace(doc.Find("span.EymY4b span").Last().Text()); rc != "" {
-			rc = strings.ReplaceAll(rc, ",", "")
-			rc = strings.Fields(rc)[0] // get number part
-			if parsed, err := strconv.Atoi(rc); err == nil {
-				app.RatingCount = parsed
-			}
 		}
 	}
 
