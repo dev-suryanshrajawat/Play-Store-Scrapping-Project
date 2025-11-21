@@ -257,10 +257,10 @@ func ParsePlayStoreHTML(doc *goquery.Document) (*App, error) {
 	if app.LastUpdated == "" {
 		app.LastUpdated = strings.TrimSpace(doc.Find("div:contains('Updated on') + div, div:contains('Updated') + div").First().Text())
 	}
-	if app.CurrentVersion == "" || app.CurrentVersion == "N.A" {
+	if app.CurrentVersion == "" && app.CurrentVersion == "N.A" {
 		app.CurrentVersion = strings.TrimSpace(doc.Find("div:contains('Current Version') + div, div:contains('Version') + div").First().Text())
 	}
-	if app.AndroidVersion == "" || app.AndroidVersion == "N.A" {
+	if app.AndroidVersion == "" && app.AndroidVersion == "N.A" {
 		app.AndroidVersion = strings.TrimSpace(doc.Find("div:contains('Requires Android') + div, div:contains('Requires') + div").First().Text())
 	}
 
@@ -439,4 +439,5 @@ func ParsePlayStoreHTML(doc *goquery.Document) (*App, error) {
 
 	return app, nil
 }
+
 
